@@ -1,17 +1,8 @@
-use crate::file_ops::{append_to_file, delete_alias, load_aliases, update_alias};
+use crate::file_ops::{self, Alias};
+use console::Style;
 use dialoguer::{theme::ColorfulTheme, Input, Select};
-use serde::{Deserialize, Serialize};
 
-const ALIAS_FILE: &str = "/home/nekzus-dev/.zsh_aliases";
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Alias {
-    pub name: String,
-    pub command: String,
-    pub description: String,
-}
-
-pub fn add_alias() {
+pub fn add_alias(file_path: &str) {
     let alias_name: String = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Enter alias name")
         .interact_text()
@@ -28,26 +19,29 @@ pub fn add_alias() {
         .unwrap();
 
     let alias = Alias {
-        name: alias_name,
-        command: alias_command,
-        description: alias_description,
+        name: alias_name.clone(),
+        command: alias_command.clone(),
+        description: alias_description.clone(),
     };
 
-    let alias_line = format!(
-        "alias {}='{}' # {}\n",
-        alias.name, alias.command, alias.description
-    );
-    append_to_file(ALIAS_FILE, &alias_line).unwrap();
-    println!("Alias added: {}", alias_line);
+    if let Err(err) = file_ops::append_to_file(file_path, &alias) {
+        eprintln!("Error adding alias: {}", err);
+        return;
+    }
+
+    let style = Style::new().green();
+    println!("{}", style.apply_to(format!("Alias added: {}", alias.name)));
+    println!("Command: {}", alias.command);
+    println!("Description: {}", alias.description);
+    println!();
 }
 
-pub fn edit_alias() {
-    let aliases = load_aliases(ALIAS_FILE);
+pub fn edit_alias(file_path: &str) {
+    let aliases = file_ops::load_aliases(file_path);
     let alias_names: Vec<_> = aliases.iter().map(|a| a.name.clone()).collect();
 
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Select alias to edit")
-        .default(0)
         .items(&alias_names)
         .interact()
         .unwrap();
@@ -68,41 +62,65 @@ pub fn edit_alias() {
 
     let new_alias = Alias {
         name: alias.name.clone(),
-        command: new_command,
-        description: new_description,
+        command: new_command.clone(),
+        description: new_description.clone(),
     };
 
-    update_alias(ALIAS_FILE, &new_alias).unwrap();
-    println!("Alias updated: {:?}", new_alias);
+    if let Err(err) = file_ops::update_alias(file_path, &new_alias) {
+        eprintln!("Error updating alias: {}", err);
+        return;
+    }
+
+    let style = Style::new().green();
+    println!(
+        "{}",
+        style.apply_to(format!("Alias updated: {}", new_alias.name))
+    );
+    println!("New command: {}", new_alias.command);
+    println!("New description: {}", new_alias.description);
+    println!();
 }
 
-pub fn remove_alias() {
-    let aliases = load_aliases(ALIAS_FILE);
+pub fn remove_alias(file_path: &str) {
+    let aliases = file_ops::load_aliases(file_path);
     let alias_names: Vec<_> = aliases.iter().map(|a| &a.name).collect();
 
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Select alias to remove")
-        .default(0)
         .items(&alias_names)
         .interact()
         .unwrap();
 
     let alias = &aliases[selection];
-    delete_alias(ALIAS_FILE, &alias.name).unwrap();
-    println!("Alias removed: {}", alias.name);
+
+    if let Err(err) = file_ops::delete_alias(file_path, &alias.name) {
+        eprintln!("Error removing alias: {}", err);
+        return;
+    }
+
+    let style = Style::new().green();
+    println!(
+        "{}",
+        style.apply_to(format!("Alias removed: {}", alias.name))
+    );
+    println!();
 }
 
-pub fn search_alias() {
-    let aliases = load_aliases(ALIAS_FILE);
+pub fn search_alias(file_path: &str) {
+    let aliases = file_ops::load_aliases(file_path);
     let alias_names: Vec<_> = aliases.iter().map(|a| &a.name).collect();
 
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Select alias to search")
-        .default(0)
         .items(&alias_names)
         .interact()
         .unwrap();
 
     let alias = &aliases[selection];
-    println!("Alias found: {:?}", alias);
+
+    let style = Style::new().cyan();
+    println!("{}", style.apply_to(format!("Alias found: {}", alias.name)));
+    println!("Command: {}", alias.command);
+    println!("Description: {}", alias.description);
+    println!();
 }

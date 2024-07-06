@@ -1,71 +1,77 @@
-use crate::alias::Alias;
-use std::fs::OpenOptions;
-use std::io::{self, BufRead, Write};
+use std::fs::{self, OpenOptions};
+use std::io::{self, Write};
 
-pub fn append_to_file(path: &str, text: &str) -> io::Result<()> {
-    let mut file = OpenOptions::new().append(true).open(path)?;
-    file.write_all(text.as_bytes())?;
+pub struct Alias {
+    pub name: String,
+    pub command: String,
+    pub description: String,
+}
+
+pub fn append_to_file(file_path: &str, alias: &Alias) -> io::Result<()> {
+    let alias_line = format!(
+        "alias {}='{}' # {}\n",
+        alias.name, alias.command, alias.description
+    );
+
+    let mut file = OpenOptions::new().append(true).open(file_path)?;
+    file.write_all(alias_line.as_bytes())?;
     Ok(())
 }
 
-pub fn load_aliases(path: &str) -> Vec<Alias> {
-    let file = OpenOptions::new().read(true).open(path).unwrap();
-    let reader = io::BufReader::new(file);
-
-    reader
-        .lines()
-        .filter_map(|line| {
-            if let Ok(line) = line {
+pub fn load_aliases(file_path: &str) -> Vec<Alias> {
+    match fs::read_to_string(file_path) {
+        Ok(content) => content
+            .lines()
+            .filter_map(|line| {
                 if line.starts_with("alias ") {
-                    let parts: Vec<&str> = line.split("=").collect();
-                    let name = parts[0][6..].to_string();
-                    let command_description: Vec<&str> = parts[1].split("#").collect();
-                    let command = command_description[0].trim_matches('\'').to_string();
+                    let parts: Vec<&str> = line.split('=').collect();
+                    if parts.len() != 2 {
+                        return None;
+                    }
+                    let name = parts[0][6..].trim().to_string();
+                    let command_description: Vec<&str> = parts[1].split('#').collect();
+                    if command_description.len() != 2 {
+                        return None;
+                    }
+                    let command = command_description[0].trim_matches('\'').trim().to_string();
                     let description = command_description[1].trim().to_string();
-                    return Some(Alias {
+                    Some(Alias {
                         name,
                         command,
                         description,
-                    });
+                    })
+                } else {
+                    None
                 }
-            }
-            None
-        })
-        .collect()
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    }
 }
 
-pub fn update_alias(path: &str, new_alias: &Alias) -> io::Result<()> {
-    let aliases = load_aliases(path);
-    let updated_aliases: Vec<Alias> = aliases
-        .into_iter()
-        .map(|alias| {
-            if alias.name == new_alias.name {
-                Alias {
-                    name: new_alias.name.clone(),
-                    command: new_alias.command.clone(),
-                    description: new_alias.description.clone(),
-                }
-            } else {
-                alias
-            }
-        })
-        .collect();
+pub fn update_alias(file_path: &str, new_alias: &Alias) -> io::Result<()> {
+    let mut aliases = load_aliases(file_path);
 
-    save_aliases(path, &updated_aliases)
+    if let Some(alias) = aliases.iter_mut().find(|a| a.name == new_alias.name) {
+        alias.command = new_alias.command.clone();
+        alias.description = new_alias.description.clone();
+    }
+
+    save_aliases(file_path, aliases.as_slice())
 }
 
-pub fn delete_alias(path: &str, alias_name: &str) -> io::Result<()> {
-    let aliases = load_aliases(path);
-    let filtered_aliases: Vec<Alias> = aliases
-        .into_iter()
-        .filter(|alias| alias.name != alias_name)
-        .collect();
-
-    save_aliases(path, &filtered_aliases)
+pub fn delete_alias(file_path: &str, alias_name: &str) -> io::Result<()> {
+    let mut aliases = load_aliases(file_path);
+    aliases.retain(|a| a.name != alias_name);
+    save_aliases(file_path, &aliases[..])
 }
 
-pub fn save_aliases(path: &str, aliases: &[Alias]) -> io::Result<()> {
-    let mut file = OpenOptions::new().write(true).truncate(true).open(path)?;
+fn save_aliases(file_path: &str, aliases: &[Alias]) -> io::Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(file_path)?;
+
     for alias in aliases {
         let alias_line = format!(
             "alias {}='{}' # {}\n",
@@ -73,5 +79,6 @@ pub fn save_aliases(path: &str, aliases: &[Alias]) -> io::Result<()> {
         );
         file.write_all(alias_line.as_bytes())?;
     }
+
     Ok(())
 }
