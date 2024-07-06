@@ -21,7 +21,7 @@ fn main() {
             "Remove" => remove_alias(ALIAS_FILE),
             "Search" => search_alias(ALIAS_FILE),
             "Exit" => break,
-            _ => println!("Invalid option"), // Handle unexpected input gracefully
+            _ => println!("Invalid option"),
         }
     }
 }
